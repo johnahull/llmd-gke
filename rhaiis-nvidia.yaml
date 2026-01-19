@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rhaiis-t4-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rhaiis-inference
+  template:
+    metadata:
+      labels:
+        app: rhaiis-inference
+    spec:
+      imagePullSecrets:
+        - name: 11009103-jhull-svc-pull-secret
+      containers:
+      - name: vllm-runtime
+        # RHAIIS vLLM CUDA image for NVIDIA GPUs (trying known version 3.0.0)
+        image: registry.redhat.io/rhaiis/vllm-cuda-rhel9:3.0.0
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: false
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+        volumeMounts:
+        - name: nvidia-install-dir-host
+          mountPath: /usr/local/nvidia
+        env:
+        - name: HF_TOKEN
+          value: "YOUR_HUGGINGFACE_TOKEN_HERE"  # Replace with your HF token
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: "all"
+        - name: NVIDIA_DRIVER_CAPABILITIES
+          value: "compute,utility"
+        - name: VLLM_LOGGING_LEVEL
+          value: "DEBUG"
+        - name: LD_LIBRARY_PATH
+          value: "/usr/local/nvidia/lib64:/usr/local/nvidia/lib:/usr/lib64:/usr/lib"
+        args:
+          - "--model"
+          - "google/gemma-2b-it"
+          - "--dtype"
+          - "half"
+          - "--max-model-len"
+          - "4096"
+          - "--device"
+          - "cuda"
+      volumes:
+      - name: nvidia-install-dir-host
+        hostPath:
+          path: /home/kubernetes/bin/nvidia
+          type: Directory

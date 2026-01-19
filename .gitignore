@@ -1,0 +1,31 @@
+# Secrets and credentials
+*secret*.yaml
+*token*.txt
+*.pem
+*.key
+.env
+.env.*
+
+# Vim swap files
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+
+# IDE and tools
+.vscode/
+.idea/
+*.iml
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db

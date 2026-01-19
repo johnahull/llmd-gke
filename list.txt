@@ -1,0 +1,6 @@
+* deploy generic VM - done
+* deploy TPU VM - done
+  - remove constraint for customConstraints/custom.denyCostlyMachineTypes
+* deploy nv GKE cluster - done
+* create tests to verify and benchmark clusters
+* deploy TPU GKE cluster

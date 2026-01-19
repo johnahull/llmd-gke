@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rhaiis-tpu-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rhaiis-tpu-inference
+  template:
+    metadata:
+      labels:
+        app: rhaiis-tpu-inference
+    spec:
+      imagePullSecrets:
+        - name: 11009103-jhull-svc-pull-secret
+      nodeSelector:
+        cloud.google.com/gke-tpu-topology: "2x2"
+        cloud.google.com/gke-tpu-accelerator: "tpu-v6e-slice"
+      containers:
+      - name: vllm-tpu-runtime
+        # RHAIIS vLLM TPU image for Google Cloud TPU v6e (Trillium)
+        image: registry.redhat.io/rhaiis/vllm-tpu-rhel9:3.2.5
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: false
+        resources:
+          requests:
+            google.com/tpu: 4
+          limits:
+            google.com/tpu: 4
+        env:
+        - name: HF_TOKEN
+          value: "YOUR_HUGGINGFACE_TOKEN_HERE"  # Replace with your HF token
+        - name: PJRT_DEVICE
+          value: "TPU"
+        - name: TPU_CHIPS_PER_HOST_BOUNDS
+          value: "2,2,1"
+        - name: TPU_HOST_BOUNDS
+          value: "1,1,1"
+        - name: TPU_WORKER_ID
+          value: "0"
+        - name: VLLM_LOGGING_LEVEL
+          value: "DEBUG"
+        - name: HF_HUB_OFFLINE
+          value: "0"
+        args:
+          - "--model"
+          - "google/gemma-2b-it"
+          - "--dtype"
+          - "half"
+          - "--max-model-len"
+          - "2048"
+          - "--tensor-parallel-size"
+          - "4"
+          - "--port"
+          - "8000"
+        ports:
+        - containerPort: 8000
+        readinessProbe:
+          tcpSocket:
+            port: 8000
+          initialDelaySeconds: 120
+          periodSeconds: 10
+        volumeMounts:
+        - name: dshm
+          mountPath: /dev/shm
+      volumes:
+      - name: dshm
+        emptyDir:
+          medium: Memory

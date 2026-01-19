@@ -1,0 +1,66 @@
+# Test scenario definitions following MLPerf 2025-2026 standards
+
+scenarios:
+  # Quick validation test - fast health check
+  quick_validation:
+    name: "Quick Validation"
+    description: "Fast health check with basic latency measurement"
+    num_requests: 10
+    concurrency: 1
+    prompt_tokens: [50, 100, 500]
+    max_tokens: 100
+    duration: 60  # seconds
+    warmup_requests: 2
+
+  # TTFT/TPOT focused benchmark (MLPerf targets: TTFT ≤ 2s, TPOT ≤ 100ms)
+  latency_benchmark:
+    name: "Latency Benchmark (TTFT/TPOT)"
+    description: "Measure Time to First Token and Time Per Output Token"
+    num_requests: 100
+    concurrency: 1
+    prompt_tokens: [10, 50, 100, 500, 1000, 2000]
+    max_tokens: [50, 100, 200, 500]
+    warmup_requests: 5
+    mlperf_targets:
+      ttft_max: 2.0      # seconds (p95)
+      tpot_max: 0.100    # seconds (p95)
+      ttft_interactive: 0.5  # seconds (p95) - aggressive target
+      tpot_interactive: 0.030  # seconds (p95) - aggressive target
+
+  # Throughput benchmark - maximum tokens/sec and requests/sec
+  throughput_benchmark:
+    name: "Throughput Benchmark"
+    description: "Maximum tokens/sec and requests/sec with progressive concurrency"
+    num_requests: 500
+    concurrency_levels: [1, 5, 10, 20, 50]
+    prompt_tokens: [100, 500]
+    max_tokens: [100, 200]
+    duration: 300  # seconds
+    error_threshold: 0.05  # Stop if error rate > 5%
+
+  # Load test - sustained traffic with realistic patterns
+  load_test:
+    name: "Sustained Load Test"
+    description: "Realistic sustained load with mixed prompt sizes"
+    num_users: [10, 25, 50, 75, 100]
+    spawn_rate: 10  # users per second
+    duration: 600  # 10 minutes
+    prompt_distribution:
+      short: 0.4    # 40% short prompts (50-100 tokens)
+      medium: 0.4   # 40% medium prompts (200-500 tokens)
+      long: 0.2     # 20% long prompts (1000-2000 tokens)
+    max_tokens_distribution:
+      short: 0.5    # 50% short responses (50-100 tokens)
+      long: 0.5     # 50% long responses (200-500 tokens)
+
+  # Stress test - progressive load increase until failure
+  stress_test:
+    name: "Stress Test"
+    description: "Progressive load increase to find breaking point"
+    num_users: [1, 5, 10, 25, 50, 100, 150, 200]
+    spawn_rate: 5  # users per second
+    step_duration: 120  # 2 minutes per concurrency level
+    prompt_tokens: 500
+    max_tokens: 200
+    error_threshold: 0.05  # 5% error rate triggers stop
+    latency_threshold: 10.0  # p95 latency > 10s triggers stop

@@ -1,0 +1,34 @@
+# Deployment target configurations for RHAIIS vLLM benchmarks
+
+targets:
+  gke-t4:
+    name: "GKE NVIDIA T4"
+    base_url: "http://136.116.159.221:8000"
+    model: "google/gemma-2b-it"
+    max_tokens: 4096
+    accelerator: "T4 GPU"
+    gpu_memory: "13.12 GiB"
+    kv_cache: "6.08 GiB"
+    backend: "XFormers"
+    expected_concurrency: 86
+    zone: "us-central1-a"
+
+  tpu-v6e:
+    name: "TPU v6e VM"
+    base_url: "http://EXTERNAL_IP:8000"  # Replace with actual TPU VM external IP
+    model: "google/gemma-2b-it"
+    max_tokens: 2048
+    accelerator: "TPU v6e-1"
+    backend: "JAX/XLA"
+    expected_concurrency: 50
+    zone: "us-east5-a"
+    notes: "First request triggers XLA compilation (5-10s), subsequent requests are fast"
+
+# Default test parameters applied to all targets
+defaults:
+  timeout: 300  # Request timeout in seconds
+  temperature: 0.7
+  top_p: 0.9
+  stream: false
+  connect_timeout: 30
+  read_timeout: 300
