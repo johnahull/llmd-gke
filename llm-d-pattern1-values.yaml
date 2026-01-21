@@ -1,0 +1,104 @@
+# Custom values for llm-d Pattern 1: Single Replica Deployment
+# This file overrides defaults in llm-d/guides/inference-scheduling/ms-inference-scheduling/values.yaml
+# Deploy with: helmfile apply -e gke -n llm-d -f /home/jhull/devel/rhaiis-test/llm-d-pattern1-values.yaml
+
+# Model Configuration
+modelArtifacts:
+  uri: "hf://google/gemma-2b-it"
+  name: "google/gemma-2b-it"
+  size: 10Gi  # 2B model is smaller than default 20Gi
+  authSecretName: "huggingface-token"  # Match our existing secret name
+
+# Decode Configuration (vLLM inference)
+decode:
+  create: true
+  replicas: 1  # Pattern 1: Single replica deployment
+
+  # Monitoring
+  monitoring:
+    podmonitor:
+      enabled: true
+      portName: "vllm"
+      path: "/metrics"
+      interval: "30s"
+
+  # vLLM Container Configuration
+  containers:
+  - name: "vllm"
+    image: ghcr.io/llm-d/llm-d-cuda:v0.4.0
+    modelCommand: vllmServe
+    args:
+      - "--disable-uvicorn-access-log"
+      - "--max-model-len"
+      - "2048"  # Reduced from 4096 due to T4 GPU memory constraints
+      - "--gpu-memory-utilization"
+      - "0.85"  # Reduced from 0.90 to prevent OOM during CUDA graph capture
+    ports:
+      - containerPort: 8000
+        name: vllm
+        protocol: TCP
+
+    # GPU Resources
+    resources:
+      limits:
+        nvidia.com/gpu: "1"  # Single T4 GPU
+      requests:
+        nvidia.com/gpu: "1"
+
+    # Volume Mounts
+    mountModelVolume: true
+    volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: torch-compile-cache
+      mountPath: /.cache
+
+    # Health Checks
+    startupProbe:
+      httpGet:
+        path: /v1/models
+        port: vllm
+      initialDelaySeconds: 30  # Model download takes time
+      periodSeconds: 30
+      timeoutSeconds: 5
+      failureThreshold: 60  # Allow up to 30 minutes for startup
+
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: vllm
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+
+    readinessProbe:
+      httpGet:
+        path: /v1/models
+        port: vllm
+      periodSeconds: 5
+      timeoutSeconds: 2
+      failureThreshold: 3
+
+  # Volumes
+  volumes:
+  - name: metrics-volume
+    emptyDir: {}
+  - name: torch-compile-cache
+    emptyDir: {}
+
+# Routing Configuration
+routing:
+  proxy:
+    enabled: false  # No P/D disaggregation in Pattern 1
+    targetPort: 8000  # vLLM default port
+
+# Accelerator Type
+accelerator:
+  type: nvidia  # NVIDIA T4 GPU
+
+# Prefill/Decode Disaggregation (disabled for Pattern 1)
+prefill:
+  create: false
+
+# Multi-node configuration (disabled for Pattern 1)
+multinode: false
