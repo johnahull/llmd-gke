@@ -119,7 +119,15 @@ kubectl label pod $POD_QWEN model-instance=qwen -n $NAMESPACE --overwrite
 kubectl label pod $POD_PHI model-instance=phi -n $NAMESPACE --overwrite
 
 # 4. Apply InferencePools, HTTPRoutes, and HealthCheckPolicies
-# (See llm-d-pattern2-tpu-setup.md Steps 4-6 for complete YAML)
+# For TPU (BBR approach):
+kubectl apply -f pattern2/manifests/inferencepools-bbr.yaml -n $NAMESPACE
+kubectl apply -f pattern2/manifests/httproutes-bbr.yaml -n $NAMESPACE
+kubectl apply -f pattern2/manifests/healthcheck-policy-fixed.yaml -n $NAMESPACE
+
+# For GPU (auto-discovery approach):
+kubectl apply -f pattern2/manifests/httproute-unified.yaml -n llm-d
+
+# See manifests/README.md for details on both approaches
 ```
 
 ### Test Multi-Model Routing
@@ -297,6 +305,7 @@ kubectl describe httproute qwen-model-route phi-model-route -n llm-d-inference-s
 
 - [`llm-d-pattern2-tpu-setup.md`](./llm-d-pattern2-tpu-setup.md) - Complete setup guide with BBR architecture
 - [`llm-d-pattern2-gpu-setup.md`](./llm-d-pattern2-gpu-setup.md) - GPU deployment guide
+- [`manifests/`](./manifests/) - Kubernetes manifests for both GPU and TPU routing
 - [`PATTERN2_BBR_BENCHMARK_RESULTS.md`](./PATTERN2_BBR_BENCHMARK_RESULTS.md) - Comprehensive benchmark analysis
 - [`PATTERN2_INVESTIGATION_SUMMARY.md`](./PATTERN2_INVESTIGATION_SUMMARY.md) - Implementation journey and learnings
 

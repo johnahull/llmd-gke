@@ -16,14 +16,30 @@ Each pattern supports both **NVIDIA GPU** (T4) and **Google Cloud TPU** (v6e) ac
 
 ```
 rhaiis-test/
+├── helm-configs/                # Custom llm-d Helm configurations (tracked)
+│   ├── helmfile.yaml.gotmpl     # Modified helmfile with pattern conditionals
+│   ├── pattern-overrides/       # Pattern-specific Helm value overrides
+│   │   ├── pattern1-overrides.yaml
+│   │   ├── pattern1-tpu-overrides.yaml
+│   │   ├── pattern2-tpu-overrides.yaml
+│   │   └── pattern3-gpu-overrides.yaml
+│   └── README.md                # Setup instructions
 ├── pattern1/                    # Pattern 1: Single Replica Baseline
 │   ├── llm-d-pattern1-gpu-setup.md
 │   ├── llm-d-pattern1-tpu-setup.md
-│   ├── llm-d-pattern1-values.yaml
+│   ├── manifests/               # Kubernetes manifests
+│   │   ├── httproute-pattern1.yaml
+│   │   └── README.md
 │   └── benchmarks/
 ├── pattern2/                    # Pattern 2: Multi-Model Serving
 │   ├── llm-d-pattern2-gpu-setup.md
 │   ├── llm-d-pattern2-tpu-setup.md
+│   ├── manifests/               # Kubernetes manifests
+│   │   ├── httproute-unified.yaml        # GPU auto-discovery
+│   │   ├── inferencepools-bbr.yaml       # TPU BBR pools
+│   │   ├── httproutes-bbr.yaml           # TPU BBR routes
+│   │   ├── healthcheck-policy-fixed.yaml # TPU health checks
+│   │   └── README.md
 │   └── benchmarks/
 ├── pattern3/                    # Pattern 3: N/S-Caching Scale-Out
 │   ├── llm-d-pattern3-gpu-setup.md
@@ -35,15 +51,8 @@ rhaiis-test/
 │   ├── scripts/                 # Shell benchmark scripts
 │   ├── config/                  # Target configurations
 │   └── results/                 # Benchmark results (HTML/JSON)
-├── llm-d/                       # llm-d Helm charts and guides
-│   └── guides/inference-scheduling/
-│       ├── helmfile.yaml.gotmpl
-│       └── ms-inference-scheduling/
-│           ├── pattern1-overrides.yaml
-│           ├── pattern1-tpu-overrides.yaml
-│           ├── pattern2-tpu-overrides.yaml
-│           └── pattern3-gpu-overrides.yaml
-└── rhaiis-test/                # Legacy testing configurations
+├── llm-d/                       # llm-d repository (clone separately, ignored)
+└── rhaiis-test/                 # Legacy testing configurations
     ├── rhaiis-nvidia.yaml       # Pre-llm-d GPU deployment
     ├── rhaiis-tpu.yaml          # Pre-llm-d TPU deployment
     └── *.md                     # Original setup guides

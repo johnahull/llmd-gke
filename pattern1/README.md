@@ -69,6 +69,15 @@ helmfile -e gke_tpu -n $NAMESPACE apply --selector type=infra
 helmfile -e gke_tpu -n $NAMESPACE apply --selector type=modelservice
 ```
 
+### Apply HTTPRoute Manifest
+After deploying infrastructure and model service:
+```bash
+# Apply HTTPRoute from manifests directory
+kubectl apply -f pattern1/manifests/httproute-pattern1.yaml -n llm-d-inference-scheduling
+```
+
+See [`manifests/README.md`](./manifests/README.md) for details.
+
 ### Test Deployment
 ```bash
 export GATEWAY_IP=$(kubectl get gateway infra-pattern1-inference-gateway \
@@ -199,6 +208,7 @@ kubectl get httproute -n llm-d-inference-scheduling
 
 - [`llm-d-pattern1-tpu-setup.md`](./llm-d-pattern1-tpu-setup.md) - Complete TPU setup guide
 - [`llm-d-pattern1-gpu-setup.md`](./llm-d-pattern1-gpu-setup.md) - Complete GPU setup guide
+- [`manifests/`](./manifests/) - Kubernetes manifests (HTTPRoute)
 - [`benchmarks/`](./benchmarks/) - Benchmark results and reports
 
 ## Architecture Decisions
