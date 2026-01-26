@@ -124,6 +124,8 @@ releases:
       - ms-inference-scheduling/values.yaml
       {{- if eq $rn "pattern1" }}
       - ms-inference-scheduling/pattern1-overrides.yaml
+      {{- else if eq $rn "pattern2" }}
+      - ms-inference-scheduling/pattern2-overrides.yaml
       {{- else if eq $rn "pattern3" }}
       - ms-inference-scheduling/pattern3-gpu-overrides.yaml
       {{- end }}

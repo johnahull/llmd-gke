@@ -86,7 +86,36 @@ Pattern 2 requires a **second GPU node**:
 
 ## Quick Start Guide (30 minutes)
 
-### Step 1: Scale GPU Node Pool to 2 Nodes
+## Important: Helmfile Configuration
+
+**Pattern 2 GPU support requires helmfile modification.** The default helmfile only supports Pattern 1 and Pattern 3 for GPU environments.
+
+Before deploying Pattern 2 on GPU, ensure the helmfile has been updated with Pattern 2 conditional:
+
+```yaml
+# In helm-configs/helmfile.yaml.gotmpl, lines 125-131:
+{{- if eq $rn "pattern1" }}
+- ms-inference-scheduling/pattern1-overrides.yaml
+{{- else if eq $rn "pattern2" }}
+- ms-inference-scheduling/pattern2-overrides.yaml  # ← Required for GPU
+{{- else if eq $rn "pattern3" }}
+- ms-inference-scheduling/pattern3-gpu-overrides.yaml
+{{- end }}
+```
+
+If this conditional is missing, Pattern 2 deployment will fail. See the main repository's `helm-configs/README.md` for the complete helmfile modification.
+
+### Step 1: Copy Updated Helmfile (If Not Already Done)
+
+```bash
+# Copy modified helmfile with Pattern 2 GPU support
+cp /home/jhull/devel/rhaiis-test/helm-configs/helmfile.yaml.gotmpl \
+   llm-d/guides/inference-scheduling/helmfile.yaml.gotmpl
+```
+
+**Note:** This step is required if the helmfile hasn't been updated yet to include Pattern 2 GPU conditional.
+
+### Step 2: Scale GPU Node Pool to 2 Nodes
 
 Mistral-7B requires a second GPU node:
 
@@ -110,7 +139,7 @@ kubectl get nodes -o wide
 # Should show 4 nodes total: 2 CPU + 2 GPU
 ```
 
-### Step 2: Create pattern2-overrides.yaml
+### Step 3: Create pattern2-overrides.yaml
 
 Copy Pattern 2 GPU Helm overrides from tracked configuration:
 
@@ -130,7 +159,7 @@ cp helm-configs/pattern-overrides/pattern2-gpu-overrides.yaml \
 - GPU utilization: 0.85 (same as pattern1)
 - Startup timeout: 90 failures × 30s = 45 min (vs 30 min for smaller model)
 
-### Step 3: Update Pattern 1 Labels (Optional but Recommended)
+### Step 4: Update Pattern 1 Labels (Optional but Recommended)
 
 Add multi-model labels to Pattern 1 for consistency:
 
@@ -153,7 +182,7 @@ cd /home/jhull/devel/rhaiis-test/llm-d/guides/inference-scheduling
 RELEASE_NAME_POSTFIX=pattern1 helmfile -e gke -n llm-d apply
 ```
 
-### Step 4: Deploy Pattern 2 ModelService
+### Step 5: Deploy Pattern 2 ModelService
 
 Deploy Mistral-7B ModelService that will share the existing InferencePool:
 
@@ -189,7 +218,7 @@ ms-pattern2-...-decode-xxx     1/1 Running   (vLLM with Mistral-7B)
 
 **Note**: Only ONE scheduler pod (gaie-pattern1-epp) manages both models via dynamic discovery.
 
-### Step 5: Verify InferencePool Discovers Both Models
+### Step 6: Verify InferencePool Discovers Both Models
 
 Check that the single InferencePool sees both backend pods:
 
@@ -205,7 +234,7 @@ kubectl get pods -n llm-d -l llm-d.ai/inferenceServing=true
 
 The InferencePool's label selector (`llm-d.ai/inferenceServing: "true"`) matches both ModelService pods.
 
-### Step 6: Update HTTPRoute (If Needed)
+### Step 7: Update HTTPRoute (If Needed)
 
 Verify HTTPRoute points to single InferencePool:
 
@@ -236,7 +265,7 @@ kubectl get httproute -n llm-d
 kubectl describe httproute llm-d-multi-model-inference -n llm-d
 ```
 
-### Step 7: Verify Deployment
+### Step 8: Verify Deployment
 
 Check all components are running correctly:
 
@@ -264,7 +293,7 @@ kubectl get svc -n llm-d | grep -E "(gaie|ms-pattern)"
 - 1 Gateway (infra-pattern1-inference-gateway)
 - 1 HTTPRoute (llm-d-multi-model-inference)
 
-### Step 8: Verify Model Discovery
+### Step 9: Verify Model Discovery
 
 Check that the scheduler discovered both models:
 
@@ -287,7 +316,7 @@ curl http://${GATEWAY_IP}/v1/models | jq
 }
 ```
 
-### Step 9: Test Multi-Model Routing (100% Accuracy)
+### Step 10: Test Multi-Model Routing (100% Accuracy)
 
 Test requests to **both models** via single Gateway endpoint:
 
@@ -325,7 +354,7 @@ done
 
 **Expected**: **10/10 successful responses for each model** (not 5/10 like old weighted routing).
 
-### Step 10: Verify Scheduler Routing
+### Step 11: Verify Scheduler Routing
 
 Check scheduler logs to see model-based routing decisions:
 
@@ -341,7 +370,7 @@ kubectl logs -n llm-d -l app.kubernetes.io/name=gaie-pattern1-epp --tail=50
 - Backend selection showing routing to different pods
 - Routing plugin decisions (prefix-cache-scorer, queue-scorer, etc.)
 
-### Step 9: Verify GPU Allocation
+### Step 12: Verify GPU Allocation
 
 Check that each vLLM pod is on a **different GPU node**:
 
