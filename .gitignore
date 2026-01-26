@@ -1,7 +1,6 @@
 # Secrets and credentials
 *pull-secret.yaml
 *-token-secret.yaml
-!huggingface-token-secret.yaml  # Allow the template file
 *token*.txt
 *.pem
 *.key
