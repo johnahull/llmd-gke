@@ -112,121 +112,15 @@ kubectl get nodes -o wide
 
 ### Step 2: Create pattern2-overrides.yaml
 
-Create Mistral-7B configuration file with shared label selector:
+Copy Pattern 2 GPU Helm overrides from tracked configuration:
+
+**Note:** The Pattern 2 GPU override file is tracked in `helm-configs/pattern-overrides/pattern2-gpu-overrides.yaml`.
+See [helm-configs/README.md](../../helm-configs/README.md) for details.
 
 ```bash
-cat > /home/jhull/devel/rhaiis-test/llm-d/guides/inference-scheduling/ms-inference-scheduling/pattern2-overrides.yaml <<'EOF'
-# Pattern 2: Mistral-7B Multi-Model Configuration
-
-# Common labels for multi-model discovery
-commonLabels:
-  llm-d.ai/inferenceServing: "true"
-  llm-d.ai/deployment: "multi-model"
-  llm-d.ai/model: "mistral-7b"
-
-# Model Configuration
-modelArtifacts:
-  uri: "hf://mistralai/Mistral-7B-Instruct-v0.3"
-  name: "mistralai/Mistral-7B-Instruct-v0.3"
-  size: 20Gi  # 7B model needs more space than 2B
-  authSecretName: "huggingface-token"
-
-# Decode Configuration (vLLM inference)
-decode:
-  create: true
-  replicas: 1  # Pattern 2: Single replica per model
-
-  # Monitoring
-  monitoring:
-    podmonitor:
-      enabled: true
-      portName: "vllm"
-      path: "/metrics"
-      interval: "30s"
-
-  # vLLM Container Configuration
-  containers:
-  - name: "vllm"
-    image: ghcr.io/llm-d/llm-d-cuda:v0.4.0
-    modelCommand: vllmServe
-    args:
-      - "--disable-uvicorn-access-log"
-      - "--max-model-len"
-      - "2048"  # Conservative for T4 GPU memory (14.58 GB)
-      - "--gpu-memory-utilization"
-      - "0.85"  # Conservative for 7B model on T4
-      - "--dtype"
-      - "half"  # FP16 for efficiency
-    ports:
-      - containerPort: 8000
-        name: vllm
-        protocol: TCP
-
-    # GPU Resources (needs full T4)
-    resources:
-      limits:
-        nvidia.com/gpu: "1"  # Single T4 GPU
-      requests:
-        nvidia.com/gpu: "1"
-
-    # Volume Mounts
-    mountModelVolume: true
-    volumeMounts:
-    - name: metrics-volume
-      mountPath: /.config
-    - name: torch-compile-cache
-      mountPath: /.cache
-
-    # Health Checks (longer timeouts for larger model)
-    startupProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      initialDelaySeconds: 60  # 7B model download takes longer
-      periodSeconds: 30
-      timeoutSeconds: 10
-      failureThreshold: 90  # Allow up to 45 minutes for startup
-
-    livenessProbe:
-      httpGet:
-        path: /health
-        port: vllm
-      periodSeconds: 10
-      timeoutSeconds: 5
-      failureThreshold: 3
-
-    readinessProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      periodSeconds: 5
-      timeoutSeconds: 2
-      failureThreshold: 3
-
-  # Volumes
-  volumes:
-  - name: metrics-volume
-    emptyDir: {}
-  - name: torch-compile-cache
-    emptyDir: {}
-
-# Routing Configuration
-routing:
-  proxy:
-    enabled: false
-    targetPort: 8000
-
-# Accelerator Type
-accelerator:
-  type: nvidia
-
-# Prefill/Decode Disaggregation (disabled for Pattern 2)
-prefill:
-  create: false
-
-# Multi-node configuration (disabled for Pattern 2)
-multinode: false
-EOF
+# Copy Pattern 2 GPU Helm overrides from helm-configs
+cp helm-configs/pattern-overrides/pattern2-gpu-overrides.yaml \
+   llm-d/guides/inference-scheduling/ms-inference-scheduling/pattern2-overrides.yaml
 ```
 
 **Key differences from pattern1-overrides.yaml**:
@@ -239,6 +133,10 @@ EOF
 ### Step 3: Update Pattern 1 Labels (Optional but Recommended)
 
 Add multi-model labels to Pattern 1 for consistency:
+
+**Note:** This modifies the Pattern 1 override file to add multi-model labels.
+Alternatively, use the pre-configured file from `helm-configs/pattern-overrides/pattern1-overrides.yaml`
+which may already include these labels.
 
 ```bash
 # Edit pattern1-overrides.yaml to add commonLabels

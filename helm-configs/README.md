@@ -47,8 +47,10 @@ helmfile apply -e gke_tpu -n llm-d --selector release=pattern2
 - `helmfile.yaml.gotmpl` - Modified helmfile with pattern conditionals
 - `pattern-overrides/pattern1-overrides.yaml` - Pattern 1 GPU configuration
 - `pattern-overrides/pattern1-tpu-overrides.yaml` - Pattern 1 TPU configuration
+- `pattern-overrides/pattern2-gpu-overrides.yaml` - Pattern 2 GPU multi-model configuration
 - `pattern-overrides/pattern2-tpu-overrides.yaml` - Pattern 2 TPU configuration
 - `pattern-overrides/pattern3-gpu-overrides.yaml` - Pattern 3 GPU configuration
+- `pattern-overrides/pattern3-tpu-overrides.yaml` - Pattern 3 TPU caching scale-out configuration
 
 ## Modifications
 

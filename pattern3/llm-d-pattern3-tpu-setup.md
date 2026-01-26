@@ -166,129 +166,15 @@ kubectl get pods -n $NAMESPACE
 
 ### Step 2: Create Pattern 3 Configuration File
 
-Create the Pattern 3 TPU configuration file:
+Copy Pattern 3 TPU Helm overrides from tracked configuration:
+
+**Note:** The Pattern 3 TPU override file is tracked in `helm-configs/pattern-overrides/pattern3-tpu-overrides.yaml`.
+See [helm-configs/README.md](../../helm-configs/README.md) for details.
 
 ```bash
-cat > /home/jhull/devel/rhaiis-test/llm-d/guides/inference-scheduling/ms-inference-scheduling/pattern3-tpu-overrides.yaml <<'EOF'
-# Pattern 3: N/S-Caching Scale-Out Deployment on TPU v6e
-
-# Model Configuration (same as Pattern 1)
-modelArtifacts:
-  uri: "hf://Qwen/Qwen2.5-3B-Instruct"
-  name: "Qwen/Qwen2.5-3B-Instruct"
-  size: 15Gi
-  authSecretName: "huggingface-token"
-
-accelerator:
-  type: google
-
-routing:
-  proxy:
-    enabled: false
-    targetPort: 8000
-
-decode:
-  create: true
-  replicas: 3  # KEY CHANGE: 3 replicas for scale-out
-
-  parallelism:
-    tensor: 4  # 4-way tensor parallelism (2x2 topology)
-
-  extraConfig:
-    nodeSelector:
-      cloud.google.com/gke-tpu-topology: "2x2"
-      cloud.google.com/gke-tpu-accelerator: "tpu-v6e-slice"
-
-  monitoring:
-    podmonitor:
-      enabled: true
-      portName: "vllm"
-      path: "/metrics"
-      interval: "30s"
-
-  containers:
-  - name: "vllm"
-    image: "vllm/vllm-tpu:v0.11.1"
-    modelCommand: vllmServe
-    args:
-      - "--max-model-len=2048"
-      - "--disable-uvicorn-access-log"
-      - "--enable-prefix-caching"  # NEW: Enable vLLM prefix caching
-    ports:
-      - containerPort: 8000
-        name: vllm
-        protocol: TCP
-
-    resources:
-      limits:
-        google.com/tpu: "4"  # Must request all 4 chips
-      requests:
-        google.com/tpu: "4"
-
-    env:
-      - name: PJRT_DEVICE
-        value: "TPU"
-      - name: TPU_CHIPS_PER_HOST_BOUNDS
-        value: "2,2,1"
-      - name: TPU_HOST_BOUNDS
-        value: "1,1,1"
-      - name: TPU_NUM_DEVICES
-        value: "4"
-      - name: TPU_WORKER_HOSTNAMES
-        valueFrom:
-          fieldRef:
-            fieldPath: status.podIP
-      - name: TPU_WORKER_ID
-        value: "0"
-      - name: HF_TOKEN
-        valueFrom:
-          secretKeyRef:
-            name: huggingface-token
-            key: token
-
-    mountModelVolume: true
-    volumeMounts:
-    - name: metrics-volume
-      mountPath: /.config
-    - name: torch-compile-cache
-      mountPath: /.cache
-
-    startupProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      initialDelaySeconds: 15
-      periodSeconds: 30
-      timeoutSeconds: 5
-      failureThreshold: 60
-
-    livenessProbe:
-      httpGet:
-        path: /health
-        port: vllm
-      periodSeconds: 10
-      timeoutSeconds: 5
-      failureThreshold: 3
-
-    readinessProbe:
-      httpGet:
-        path: /v1/models
-        port: vllm
-      periodSeconds: 5
-      timeoutSeconds: 2
-      failureThreshold: 3
-
-  volumes:
-  - name: metrics-volume
-    emptyDir: {}
-  - name: torch-compile-cache
-    emptyDir: {}
-
-prefill:
-  create: false
-
-multinode: false
-EOF
+# Copy Pattern 3 TPU Helm overrides from helm-configs
+cp helm-configs/pattern-overrides/pattern3-tpu-overrides.yaml \
+   llm-d/guides/inference-scheduling/ms-inference-scheduling/pattern3-tpu-overrides.yaml
 
 echo "✅ Created pattern3-tpu-overrides.yaml"
 ```
@@ -403,30 +289,13 @@ echo "Deploying Pattern 3 (3 replicas)..."
 helmfile -e gke_tpu -n $NAMESPACE apply
 
 # Create HTTPRoute to connect Gateway to InferencePool
-cat <<'EOF' | kubectl apply -f -
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: pattern3-route
-  namespace: llm-d-inference-scheduling
-spec:
-  parentRefs:
-  - group: gateway.networking.k8s.io
-    kind: Gateway
-    name: infra-pattern3-inference-gateway
-  rules:
-  - backendRefs:
-    - group: inference.networking.k8s.io
-      kind: InferencePool
-      name: gaie-pattern3
-    matches:
-    - path:
-        type: PathPrefix
-        value: /
-EOF
+# Apply Pattern 3 HTTPRoute from manifests directory
+kubectl apply -f pattern3/manifests/httproute-pattern3.yaml -n llm-d-inference-scheduling
 
 echo "✅ Pattern 3 deployment initiated"
 ```
+
+See [`manifests/README.md`](manifests/README.md) for the HTTPRoute manifest details.
 
 **What gets deployed** (with RELEASE_NAME_POSTFIX=pattern3):
 - `infra-pattern3-inference-gateway` - Gateway with new external IP
@@ -999,28 +868,11 @@ export RELEASE_NAME_POSTFIX="pattern1"
 helmfile -e gke_tpu -n llm-d-inference-scheduling apply
 
 # Create HTTPRoute for Pattern 1
-cat <<'EOF' | kubectl apply -f -
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: pattern1-route
-  namespace: llm-d-inference-scheduling
-spec:
-  parentRefs:
-  - group: gateway.networking.k8s.io
-    kind: Gateway
-    name: infra-pattern1-inference-gateway
-  rules:
-  - backendRefs:
-    - group: inference.networking.k8s.io
-      kind: InferencePool
-      name: gaie-pattern1
-    matches:
-    - path:
-        type: PathPrefix
-        value: /
-EOF
+# Restore Pattern 1 HTTPRoute from manifests directory
+kubectl apply -f pattern1/manifests/httproute-pattern1.yaml -n llm-d-inference-scheduling
 ```
+
+**Note:** Using the Pattern 1 HTTPRoute manifest for recovery.
 
 ## Next Steps After Pattern 3
 

@@ -1,0 +1,118 @@
+# Pattern 3: N/S-Caching Scale-Out Deployment on TPU v6e
+
+# Model Configuration (same as Pattern 1)
+modelArtifacts:
+  uri: "hf://Qwen/Qwen2.5-3B-Instruct"
+  name: "Qwen/Qwen2.5-3B-Instruct"
+  size: 15Gi
+  authSecretName: "huggingface-token"
+
+accelerator:
+  type: google
+
+routing:
+  proxy:
+    enabled: false
+    targetPort: 8000
+
+decode:
+  create: true
+  replicas: 3  # KEY CHANGE: 3 replicas for scale-out
+
+  parallelism:
+    tensor: 4  # 4-way tensor parallelism (2x2 topology)
+
+  extraConfig:
+    nodeSelector:
+      cloud.google.com/gke-tpu-topology: "2x2"
+      cloud.google.com/gke-tpu-accelerator: "tpu-v6e-slice"
+
+  monitoring:
+    podmonitor:
+      enabled: true
+      portName: "vllm"
+      path: "/metrics"
+      interval: "30s"
+
+  containers:
+  - name: "vllm"
+    image: "vllm/vllm-tpu:v0.11.1"
+    modelCommand: vllmServe
+    args:
+      - "--max-model-len=2048"
+      - "--disable-uvicorn-access-log"
+      - "--enable-prefix-caching"  # NEW: Enable vLLM prefix caching
+    ports:
+      - containerPort: 8000
+        name: vllm
+        protocol: TCP
+
+    resources:
+      limits:
+        google.com/tpu: "4"  # Must request all 4 chips
+      requests:
+        google.com/tpu: "4"
+
+    env:
+      - name: PJRT_DEVICE
+        value: "TPU"
+      - name: TPU_CHIPS_PER_HOST_BOUNDS
+        value: "2,2,1"
+      - name: TPU_HOST_BOUNDS
+        value: "1,1,1"
+      - name: TPU_NUM_DEVICES
+        value: "4"
+      - name: TPU_WORKER_HOSTNAMES
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+      - name: TPU_WORKER_ID
+        value: "0"
+      - name: HF_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: huggingface-token
+            key: token
+
+    mountModelVolume: true
+    volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: torch-compile-cache
+      mountPath: /.cache
+
+    startupProbe:
+      httpGet:
+        path: /v1/models
+        port: vllm
+      initialDelaySeconds: 15
+      periodSeconds: 30
+      timeoutSeconds: 5
+      failureThreshold: 60
+
+    livenessProbe:
+      httpGet:
+        path: /health
+        port: vllm
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+
+    readinessProbe:
+      httpGet:
+        path: /v1/models
+        port: vllm
+      periodSeconds: 5
+      timeoutSeconds: 2
+      failureThreshold: 3
+
+  volumes:
+  - name: metrics-volume
+    emptyDir: {}
+  - name: torch-compile-cache
+    emptyDir: {}
+
+prefill:
+  create: false
+
+multinode: false

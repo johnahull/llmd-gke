@@ -121,6 +121,17 @@ helmfile -e gke_gpu -n $NAMESPACE apply --selector type=infra
 helmfile -e gke_gpu -n $NAMESPACE apply --selector type=modelservice
 ```
 
+### Apply HTTPRoute Manifest
+
+After deploying infrastructure and model service:
+
+```bash
+# Apply HTTPRoute from manifests directory
+kubectl apply -f pattern3/manifests/httproute-pattern3.yaml -n llm-d-inference-scheduling
+```
+
+See [`manifests/README.md`](./manifests/README.md) for details.
+
 **Wait for deployment** (2-3 minutes per replica):
 ```bash
 kubectl get pods -n llm-d -l llm-d.ai/inferenceServing=true -w
@@ -336,6 +347,7 @@ decode:
 - [`llm-d-pattern3-gpu-setup.md`](./llm-d-pattern3-gpu-setup.md) - Complete GPU setup guide
 - [`llm-d-pattern3-tpu-setup.md`](./llm-d-pattern3-tpu-setup.md) - TPU deployment guide
 - [`PATTERN3_QUICKSTART.md`](./PATTERN3_QUICKSTART.md) - Quick reference commands
+- [`manifests/`](./manifests/) - Kubernetes manifests (HTTPRoute)
 - [`benchmarks/`](./benchmarks/) - Benchmark results
 
 ## When to Use Pattern 3

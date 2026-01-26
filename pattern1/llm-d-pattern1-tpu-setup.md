@@ -264,28 +264,11 @@ export RELEASE_NAME_POSTFIX="pattern1"
 helmfile -e gke_tpu -n $NAMESPACE apply
 
 # Create HTTPRoute to connect Gateway to InferencePool
-cat <<'EOF' | kubectl apply -f -
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: pattern1-route
-  namespace: llm-d-inference-scheduling
-spec:
-  parentRefs:
-  - group: gateway.networking.k8s.io
-    kind: Gateway
-    name: infra-pattern1-inference-gateway
-  rules:
-  - backendRefs:
-    - group: inference.networking.k8s.io
-      kind: InferencePool
-      name: gaie-pattern1
-    matches:
-    - path:
-        type: PathPrefix
-        value: /
-EOF
+# Apply HTTPRoute from manifests directory
+kubectl apply -f pattern1/manifests/httproute-pattern1.yaml -n llm-d-inference-scheduling
 ```
+
+See [`manifests/README.md`](manifests/README.md) for the HTTPRoute manifest details.
 
 **What gets deployed** (with RELEASE_NAME_POSTFIX=pattern1):
 - `infra-pattern1-inference-gateway` - Gateway with external IP
