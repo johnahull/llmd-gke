@@ -111,6 +111,8 @@ releases:
       - ms-inference-scheduling/pattern1-tpu-overrides.yaml
       {{- else if eq $rn "pattern2" }}
       - ms-inference-scheduling/pattern2-tpu-overrides.yaml
+      {{- else if eq $rn "pattern3" }}
+      - ms-inference-scheduling/pattern3-tpu-overrides.yaml
       {{- end }}
     {{- else if eq .Environment.Name "xpu" }}
       - ms-inference-scheduling/values_xpu.yaml
