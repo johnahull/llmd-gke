@@ -43,9 +43,28 @@ Defines GKE HealthCheckPolicies for each InferencePool:
 
 ## Deployment
 
+### Prerequisites: Deploy BBR
+
+Before applying these manifests, you must deploy Body-Based Router (BBR) using Helm:
+
+```bash
+# Set environment variables
+export NAMESPACE="llm-d-inference-scheduling"  # or "llm-d" for GPU
+export GATEWAY_NAME="infra-pattern1-inference-gateway"
+
+# Install BBR via Helm
+helm install body-based-router \
+  oci://registry.k8s.io/gateway-api-inference-extension/charts/body-based-routing \
+  --namespace $NAMESPACE \
+  --set provider.name=gke \
+  --set inferenceGateway.name=$GATEWAY_NAME
+```
+
+**See [../BBR_HELM_DEPLOYMENT.md](../BBR_HELM_DEPLOYMENT.md) for complete deployment instructions.**
+
 ### For GPU (Auto-Discovery Approach)
 
-After deploying models with helmfile:
+After deploying BBR and models with helmfile:
 
 ```bash
 # Apply unified HTTPRoute
@@ -54,9 +73,37 @@ kubectl apply -f pattern2/manifests/httproute-unified.yaml -n llm-d
 
 ### For TPU (BBR Header-Based Routing)
 
-After deploying models with helmfile:
+After deploying BBR and models with helmfile:
 
 ```bash
+# Create model allowlist ConfigMaps (required for BBR)
+kubectl apply -f - <<EOF
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: qwen-allowlist
+  namespace: llm-d-inference-scheduling
+  labels:
+    inference.networking.k8s.io/bbr-managed: "true"
+data:
+  baseModel: "Qwen/Qwen2.5-3B-Instruct"
+  adapters: |
+    # No adapters for base model
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: phi-allowlist
+  namespace: llm-d-inference-scheduling
+  labels:
+    inference.networking.k8s.io/bbr-managed: "true"
+data:
+  baseModel: "microsoft/Phi-3-mini-4k-instruct"
+  adapters: |
+    # No adapters for base model
+EOF
+
 # Apply InferencePools
 kubectl apply -f pattern2/manifests/inferencepools-bbr.yaml -n llm-d-inference-scheduling
 
@@ -101,6 +148,10 @@ vLLM Pod
 
 ## See Also
 
-- [Pattern 2 TPU Setup Guide](../llm-d-pattern2-tpu-setup.md)
-- [Pattern 2 GPU Setup Guide](../llm-d-pattern2-gpu-setup.md)
-- [BBR Benchmark Results](../PATTERN2_BBR_BENCHMARK_RESULTS.md)
+### Deployment Guides
+- [BBR Helm Deployment](../BBR_HELM_DEPLOYMENT.md) - BBR deployment with official GKE Helm chart
+- [Pattern 2 TPU Setup Guide](../llm-d-pattern2-tpu-setup.md) - Complete TPU deployment walkthrough
+- [Pattern 2 GPU Setup Guide](../llm-d-pattern2-gpu-setup.md) - Complete GPU deployment walkthrough
+
+### Analysis
+- [BBR Benchmark Results](../PATTERN2_BBR_BENCHMARK_RESULTS.md) - Performance analysis

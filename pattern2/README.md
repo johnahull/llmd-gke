@@ -85,11 +85,39 @@ vLLM Pod (Qwen model)
 ## Quick Start
 
 ### Prerequisites
-- Pattern 1 infrastructure deployed (Gateway, BBR, EPP)
+- Pattern 1 infrastructure deployed (Gateway, EPP)
 - 2 TPU v6e nodes available (or 2 GPU nodes)
+- Helm 3.x installed
 - Models pods deployed and labeled
 
 ### Deploy Pattern 2
+
+#### Step 1: Deploy BBR (Body-Based Router)
+
+Deploy BBR using the official GKE Helm chart:
+
+```bash
+# Set environment variables
+export NAMESPACE="llm-d-inference-scheduling"  # or "llm-d" for GPU
+export GATEWAY_NAME="infra-pattern1-inference-gateway"  # or your gateway name
+
+# Install BBR via Helm
+helm install body-based-router \
+  oci://registry.k8s.io/gateway-api-inference-extension/charts/body-based-routing \
+  --namespace $NAMESPACE \
+  --set provider.name=gke \
+  --set inferenceGateway.name=$GATEWAY_NAME
+
+# Wait for BBR to be ready
+kubectl wait --for=condition=Ready pod \
+  -l app.kubernetes.io/name=body-based-routing \
+  -n $NAMESPACE \
+  --timeout=120s
+```
+
+**See [BBR_HELM_DEPLOYMENT.md](./BBR_HELM_DEPLOYMENT.md) for detailed instructions and troubleshooting.**
+
+#### Step 2: Scale Up Cluster and Deploy Models
 
 ```bash
 # 1. Scale up TPU node pool to 2 nodes
@@ -101,7 +129,6 @@ gcloud container clusters resize tpu-test-cluster \
 
 # 2. Deploy both model pods
 cd /home/jhull/devel/rhaiis-test/llm-d/guides/inference-scheduling
-export NAMESPACE="llm-d-inference-scheduling"
 
 # Deploy Pattern 1 (Qwen)
 export RELEASE_NAME_POSTFIX="pattern1"
@@ -117,8 +144,45 @@ POD_PHI=$(kubectl get pod -n $NAMESPACE -l app.kubernetes.io/instance=ms-pattern
 
 kubectl label pod $POD_QWEN model-instance=qwen -n $NAMESPACE --overwrite
 kubectl label pod $POD_PHI model-instance=phi -n $NAMESPACE --overwrite
+```
 
-# 4. Apply InferencePools, HTTPRoutes, and HealthCheckPolicies
+#### Step 3: Create Model Allowlist ConfigMaps
+
+**Critical:** BBR requires allowlist ConfigMaps to map model names.
+
+```bash
+# For TPU (Qwen + Phi-3)
+kubectl apply -f - <<EOF
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: qwen-allowlist
+  namespace: $NAMESPACE
+  labels:
+    inference.networking.k8s.io/bbr-managed: "true"
+data:
+  baseModel: "Qwen/Qwen2.5-3B-Instruct"
+  adapters: |
+    # No adapters for base model
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: phi-allowlist
+  namespace: $NAMESPACE
+  labels:
+    inference.networking.k8s.io/bbr-managed: "true"
+data:
+  baseModel: "microsoft/Phi-3-mini-4k-instruct"
+  adapters: |
+    # No adapters for base model
+EOF
+```
+
+#### Step 4: Deploy InferencePools, HTTPRoutes, and HealthCheckPolicies
+
+```bash
 # For TPU (BBR approach):
 kubectl apply -f pattern2/manifests/inferencepools-bbr.yaml -n $NAMESPACE
 kubectl apply -f pattern2/manifests/httproutes-bbr.yaml -n $NAMESPACE
@@ -126,6 +190,8 @@ kubectl apply -f pattern2/manifests/healthcheck-policy-fixed.yaml -n $NAMESPACE
 
 # For GPU (auto-discovery approach):
 kubectl apply -f pattern2/manifests/httproute-unified.yaml -n llm-d
+
+# Wait 2-3 minutes for GKE health checks to propagate
 
 # See manifests/README.md for details on both approaches
 ```
@@ -167,7 +233,9 @@ curl -X POST http://${GATEWAY_IP}/v1/completions \
 3. Injects header: `X-Gateway-Base-Model-Name: "Qwen/Qwen2.5-3B-Instruct"`
 4. Clears route cache to force HTTPRoute re-evaluation
 
-**Deployment:** `body-based-router` pod in `llm-d-inference-scheduling` namespace
+**Deployment:**
+- Helm chart: `registry.k8s.io/gateway-api-inference-extension/charts/body-based-routing`
+- See [BBR_HELM_DEPLOYMENT.md](./BBR_HELM_DEPLOYMENT.md) for complete deployment guide
 
 ### HTTPRoute Header Matching
 **Purpose:** Route requests based on BBR-injected header
@@ -303,9 +371,15 @@ kubectl describe httproute qwen-model-route phi-model-route -n llm-d-inference-s
 
 ## Documentation
 
-- [`llm-d-pattern2-tpu-setup.md`](./llm-d-pattern2-tpu-setup.md) - Complete setup guide with BBR architecture
+### Deployment Guides
+- [`BBR_HELM_DEPLOYMENT.md`](./BBR_HELM_DEPLOYMENT.md) - BBR deployment with official GKE Helm chart
+- [`llm-d-pattern2-tpu-setup.md`](./llm-d-pattern2-tpu-setup.md) - Complete TPU setup guide with BBR architecture
 - [`llm-d-pattern2-gpu-setup.md`](./llm-d-pattern2-gpu-setup.md) - GPU deployment guide
+
+### Configuration and Manifests
 - [`manifests/`](./manifests/) - Kubernetes manifests for both GPU and TPU routing
+
+### Analysis and Results
 - [`PATTERN2_BBR_BENCHMARK_RESULTS.md`](./PATTERN2_BBR_BENCHMARK_RESULTS.md) - Comprehensive benchmark analysis
 - [`PATTERN2_INVESTIGATION_SUMMARY.md`](./PATTERN2_INVESTIGATION_SUMMARY.md) - Implementation journey and learnings
 

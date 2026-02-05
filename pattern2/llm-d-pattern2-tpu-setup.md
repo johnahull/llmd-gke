@@ -333,6 +333,8 @@ spec:
 
 ## Quick Start Guide (45 minutes)
 
+> **📋 Note on BBR Deployment:** This guide assumes BBR (Body-Based Router) is already deployed from Pattern 1. If you need to deploy BBR, see [BBR_HELM_DEPLOYMENT.md](./BBR_HELM_DEPLOYMENT.md) for the official GKE Helm-based deployment guide.
+
 ### Step 1: Scale Up TPU Node Pool
 
 Ensure 2 TPU nodes are available:
