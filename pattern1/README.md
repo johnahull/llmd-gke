@@ -12,14 +12,18 @@ Pattern 1 establishes the foundational deployment architecture for llm-d on Goog
 - Exposes OpenAI-compatible API via Gateway API
 - Supports both NVIDIA GPU and Google TPU accelerators
 
+**Deployment Options:**
+1. **KServe LLMInferenceService** (Recommended) - Istio + KServe + llm-d integration
+2. **Helm-based** (Legacy) - Direct llm-d Helm chart deployment
+
 **Architecture:**
 ```
-Internet → GKE Gateway → Inference Scheduler (EPP) → vLLM Pod
-                              ↓
-                    Intelligent routing based on:
-                    - Queue depth
-                    - KV cache utilization
-                    - Prefix cache hits
+Internet → Gateway → Inference Scheduler (EPP) → vLLM Pod
+                         ↓
+               Intelligent routing based on:
+               - Queue depth
+               - KV cache utilization
+               - Prefix cache hits
 ```
 
 ## Key Components
@@ -49,13 +53,68 @@ Internet → GKE Gateway → Inference Scheduler (EPP) → vLLM Pod
 
 ## Quick Start
 
-### Prerequisites
+### Option 1: KServe LLMInferenceService (Recommended)
+
+The KServe-based deployment provides:
+- **Automated resource creation** - HTTPRoute and InferencePool auto-created
+- **Declarative configuration** - Single YAML manifest for entire deployment
+- **Istio integration** - Advanced traffic management and observability
+- **Simplified lifecycle** - Autoscaling, canary deployments, monitoring built-in
+
+**Prerequisites:**
+- llm-d-infra-xks operators installed (cert-manager, sail-operator, KServe)
+- Gateway configured in opendatahub namespace
+- See [`istio-kserve-llmd-architecture.md`](./istio-kserve-llmd-architecture.md) for complete guide
+
+**Deploy:**
+```bash
+# Create namespace and secrets (one-time setup)
+export NAMESPACE=llm-d-inference-scheduling
+kubectl create namespace $NAMESPACE
+
+kubectl create secret generic redhat-pull-secret \
+  --type=kubernetes.io/dockerconfigjson \
+  --from-file=.dockerconfigjson=~/.config/containers/auth.json \
+  -n $NAMESPACE
+
+kubectl create secret generic hf-token \
+  --from-literal=HF_TOKEN=<your-token> \
+  -n $NAMESPACE
+
+# Deploy LLMInferenceService
+kubectl apply -f pattern1/manifests/llmisvc-pattern1-tpu.yaml
+```
+
+**Verify:**
+```bash
+# Check status
+kubectl get llmisvc qwen2-3b-pattern1 -n llm-d-inference-scheduling
+
+# Test inference
+GATEWAY_IP=$(kubectl get gateway inference-gateway -n opendatahub \
+  -o jsonpath='{.status.addresses[0].value}')
+
+curl -X POST "http://${GATEWAY_IP}/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -H "Host: qwen2-3b-pattern1.llm-d-inference-scheduling.svc.cluster.local" \
+  -d '{
+    "model": "Qwen/Qwen2.5-3B-Instruct",
+    "messages": [{"role": "user", "content": "What is Kubernetes?"}],
+    "max_tokens": 100
+  }'
+```
+
+For complete installation and troubleshooting, see [`istio-kserve-llmd-architecture.md`](./istio-kserve-llmd-architecture.md).
+
+### Option 2: Helm-based Deployment (Legacy)
+
+**Prerequisites:**
 - GKE cluster with GPU or TPU node pool
 - Red Hat registry credentials
 - Hugging Face token
 - llm-d repository cloned
 
-### Deploy (TPU)
+**Deploy (TPU):**
 ```bash
 cd /home/jhull/devel/rhaiis-test/llm-d/guides/inference-scheduling
 
@@ -69,7 +128,8 @@ helmfile -e gke_tpu -n $NAMESPACE apply --selector type=infra
 helmfile -e gke_tpu -n $NAMESPACE apply --selector type=modelservice
 ```
 
-### Apply HTTPRoute Manifest
+**Apply HTTPRoute Manifest:**
+
 After deploying infrastructure and model service:
 ```bash
 # Apply HTTPRoute from manifests directory
@@ -78,7 +138,7 @@ kubectl apply -f pattern1/manifests/httproute-pattern1.yaml -n llm-d-inference-s
 
 See [`manifests/README.md`](./manifests/README.md) for details.
 
-### Test Deployment
+**Test Deployment:**
 ```bash
 export GATEWAY_IP=$(kubectl get gateway infra-pattern1-inference-gateway \
   -n llm-d-inference-scheduling -o jsonpath='{.status.addresses[0].value}')
@@ -206,9 +266,17 @@ kubectl get httproute -n llm-d-inference-scheduling
 
 ## Documentation
 
+### KServe-based Deployment
+- [`istio-kserve-llmd-architecture.md`](./istio-kserve-llmd-architecture.md) - **Complete KServe + Istio architecture guide** (Recommended)
+- [`manifests/llmisvc-pattern1-tpu.yaml`](./manifests/llmisvc-pattern1-tpu.yaml) - LLMInferenceService manifest
+
+### Helm-based Deployment (Legacy)
 - [`llm-d-pattern1-tpu-setup.md`](./llm-d-pattern1-tpu-setup.md) - Complete TPU setup guide
 - [`llm-d-pattern1-gpu-setup.md`](./llm-d-pattern1-gpu-setup.md) - Complete GPU setup guide
-- [`manifests/`](./manifests/) - Kubernetes manifests (HTTPRoute)
+- [`manifests/httproute-pattern1.yaml`](./manifests/httproute-pattern1.yaml) - HTTPRoute manifest
+- [`manifests/README.md`](./manifests/README.md) - Manifest documentation
+
+### Benchmarks
 - [`benchmarks/`](./benchmarks/) - Benchmark results and reports
 
 ## Architecture Decisions
