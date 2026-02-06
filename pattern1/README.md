@@ -106,6 +106,55 @@ curl -X POST "http://${GATEWAY_IP}/v1/chat/completions" \
 
 For complete installation and troubleshooting, see [`istio-kserve-llmd-architecture.md`](./istio-kserve-llmd-architecture.md).
 
+## Security Configuration
+
+Pattern 1 implements **TLS at the edge** with **network isolation**:
+
+### TLS Termination
+
+External traffic uses HTTPS, internal traffic uses HTTP:
+
+```bash
+# Test HTTPS endpoint (self-signed cert)
+GATEWAY_IP=$(kubectl get gateway inference-gateway -n opendatahub \
+  -o jsonpath='{.status.addresses[0].value}')
+
+curl -k -X POST "https://${GATEWAY_IP}/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -H "Host: qwen2-3b-pattern1.llm-d-inference-scheduling.svc.cluster.local" \
+  -d '{
+    "model": "Qwen/Qwen2.5-3B-Instruct",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "max_tokens": 50
+  }'
+```
+
+### Network Isolation
+
+NetworkPolicies enforce pod-level isolation:
+
+```bash
+# Apply NetworkPolicies (included in manifests/)
+kubectl apply -f pattern1/manifests/networkpolicy-default-deny.yaml
+kubectl apply -f pattern1/manifests/networkpolicy-allow-gateway.yaml
+kubectl apply -f pattern1/manifests/networkpolicy-allow-vllm-egress.yaml
+
+# Verify policies active
+kubectl get networkpolicy -n llm-d-inference-scheduling
+```
+
+**What's Protected:**
+- ✅ External traffic encrypted with TLS
+- ✅ Pods isolated with default-deny NetworkPolicy
+- ✅ Only Gateway can reach vLLM pods
+- ✅ Lateral movement blocked
+
+**What's Not Protected:**
+- ❌ Internal traffic is plain HTTP (no mTLS)
+- ❌ No authentication (add at Gateway for production)
+
+See [`istio-kserve-llmd-architecture.md`](./istio-kserve-llmd-architecture.md) Security Model section for details.
+
 ### Option 2: Helm-based Deployment (Legacy)
 
 **Prerequisites:**

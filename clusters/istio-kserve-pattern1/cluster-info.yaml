@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-info
+  namespace: kube-system
+  labels:
+    cluster.llmd.ai/name: istio-kserve-pattern1
+    cluster.llmd.ai/environment: production
+data:
+  # Cluster Identity
+  name: istio-kserve-pattern1
+  provider: gke
+  project: ecoeng-llmd
+  region: europe-west4
+  zone: europe-west4-a
+
+  # Cluster Configuration
+  kubernetes-version: 1.34.3-gke.1051003
+  created: "2026-02-06"
+  network: default
+  subnetwork: default
+  pod-cidr: 10.28.0.0/14
+  service-cidr: 34.118.224.0/20
+
+  # Network Policy
+  network-policy-enabled: "true"
+  network-policy-provider: CALICO
+
+  # Node Pools
+  node-pools: |
+    - name: default-pool
+      machine-type: n1-standard-4
+      disk-size: 100GB
+      node-count: 2
+      autoscaling: false
+      labels:
+        purpose: control-plane
+
+    - name: tpu-v6e-pool
+      machine-type: ct6e-standard-4t
+      disk-size: 100GB
+      accelerator:
+        type: tpu-v6e
+        count: 4
+        topology: 2x2
+      node-count: 1
+      autoscaling: false
+      labels:
+        cloud.google.com/gke-tpu-accelerator: tpu-v6e-slice
+        cloud.google.com/gke-tpu-topology: 2x2
+      taints:
+        - key: google.com/tpu
+          value: present
+          effect: NoSchedule
+
+  # Infrastructure Components
+  cert-manager-version: v1.16.2
+  sail-operator-version: 3.1.x
+  kserve-version: v0.15
+
+  # Gateway Configuration
+  gateway-name: inference-gateway
+  gateway-namespace: opendatahub
+  gateway-external-ip: 34.7.208.8
+  gateway-service: inference-gateway-istio
+  gateway-ports: "80,443"
+  gateway-tls: enabled
+
+  # Security
+  tls-termination: gateway
+  internal-traffic: http
+  mtls-enabled: "false"
+  networkpolicy-enforced: "true"
+  certificate-manager: cert-manager
+  certificate-issuer: opendatahub-ca-issuer
+  certificate-type: self-signed
+
+  # Deployed Applications
+  deployments: |
+    - name: qwen2-3b-pattern1
+      type: LLMInferenceService
+      namespace: llm-d-inference-scheduling
+      model: Qwen/Qwen2.5-3B-Instruct
+      replicas: 1
+      accelerator: tpu-v6e
+      image: registry.redhat.io/rhaiis/vllm-tpu-rhel9:3.2.5
+      scheduler: EPP
+      status: Running

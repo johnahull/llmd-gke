@@ -1,0 +1,45 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-vllm-egress
+  namespace: llm-d-inference-scheduling
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: qwen2-3b-pattern1
+      kserve.io/component: workload
+
+  policyTypes:
+  - Egress
+
+  egress:
+  # Allow DNS lookups to CoreDNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+  # Allow HTTPS egress for HuggingFace model downloads
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+
+  # Allow Kubernetes API access (for pod metadata, service discovery)
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          component: apiserver
+    ports:
+    - protocol: TCP
+      port: 443

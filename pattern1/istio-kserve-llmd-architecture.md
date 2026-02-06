@@ -51,7 +51,55 @@ vLLM Pods on TPU v6e (managed by KServe LLMInferenceService)
 2. **KServe LLMInferenceService** - Manages vLLM lifecycle (autoscaling, canary, monitoring, HTTPRoute creation)
 3. **Gateway API (not Istio VirtualService)** - Kubernetes-native routing, required by llm-d InferencePool
 4. **EPP Scheduler** - Enabled via `router.scheduler: {}` in LLMInferenceService spec
-5. **Istio Ingress Gateway only** - No service mesh sidecars (minimize resource overhead)
+5. **No service mesh sidecars** - Pattern 1 design decision for minimal resource overhead
+   - **Plain HTTP internally** - vLLM serves HTTP on port 8000
+   - **TLS at edge only** - Gateway terminates external TLS (see Security Model below)
+
+### Security Model
+
+Pattern 1 implements **TLS at the edge** with **network isolation** for defense in depth:
+
+**Encryption:**
+- **External Traffic** → Gateway terminates TLS (HTTPS on port 443)
+- **Internal Traffic** → Plain HTTP (Gateway → vLLM pods)
+- **No mTLS** between services (no Istio sidecars injected)
+
+**Why no sidecars?**
+- Pattern 1 design prioritizes minimal resource overhead for single-model deployments
+- Sidecars add ~0.5 CPU and ~200Mi memory per pod
+- With TPU v6e deployments, minimizing overhead maximizes model serving capacity
+
+**Network Isolation:**
+- **NetworkPolicies** enforce pod-level isolation in application namespace
+- Default deny-all policy with explicit allow rules for:
+  - Gateway → vLLM pods (port 8000)
+  - vLLM → DNS, HuggingFace CDN (model downloads)
+  - Kubelet → vLLM pods (health probes)
+- Blocks lateral movement between pods
+
+**Certificate Management:**
+- **cert-manager** issues certificates for Gateway HTTPS listener
+- Self-signed CA for testing; production should use Let's Encrypt or organization CA
+- Certificates auto-renewed by cert-manager
+
+**Security Trade-offs:**
+
+| Aspect | Pattern 1 Approach | Alternative | Trade-off |
+|--------|-------------------|-------------|-----------|
+| **Service-to-service encryption** | None (HTTP only) | Istio mTLS with sidecars | Resource efficiency vs. encryption |
+| **Network isolation** | NetworkPolicies | Service mesh authz policies | Simpler policies vs. fine-grained control |
+| **Certificate management** | cert-manager self-signed | Let's Encrypt or org CA | Testing simplicity vs. production trust |
+| **Egress control** | Allow HTTPS:443 to any destination | IP-based restrictions | Simplicity vs. tighter control |
+
+**Production Hardening Recommendations:**
+
+For production deployments, consider:
+1. **Use trusted CA** - Replace self-signed certs with Let's Encrypt or organization CA
+2. **Add Web Application Firewall** - Deploy Cloud Armor for DDoS protection and rate limiting
+3. **Restrict egress IPs** - Update NetworkPolicy to allow only HuggingFace CDN CIDR ranges
+4. **Enable audit logging** - Track all API access through Gateway
+5. **Add authentication** - Implement API key validation or OAuth at Gateway
+6. **Monitor network traffic** - Use Istio telemetry (without sidecars via ambient mesh) or network flow logs
 
 ## Component Details
 
@@ -312,7 +360,9 @@ cd ~/llm-d-infra-xks
 
 This creates:
 - Gateway resource in opendatahub namespace
-- Mounts CA bundle at `/var/run/secrets/opendatahub/ca.crt` for mTLS
+- Mounts CA bundle at `/var/run/secrets/opendatahub/ca.crt` for cert-manager certificate issuance
+- The CA bundle is used by cert-manager to issue certificates for the Gateway's HTTPS listener
+- Internal traffic uses plain HTTP with no mTLS
 
 **Step 2: Verify Gateway**
 
@@ -441,7 +491,7 @@ spec:
         httpGet:
           path: /health
           port: 8000
-          scheme: HTTPS
+          scheme: HTTP
         initialDelaySeconds: 240  # TPU init (2-3 min) + model download + compilation
         periodSeconds: 30
         timeoutSeconds: 30
@@ -451,7 +501,7 @@ spec:
         httpGet:
           path: /v1/models
           port: 8000
-          scheme: HTTPS
+          scheme: HTTP
         initialDelaySeconds: 240
         periodSeconds: 10
         timeoutSeconds: 10
